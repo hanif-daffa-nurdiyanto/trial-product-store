@@ -1,5 +1,8 @@
 # Trial Product Store
 
+<img width="1440" height="811" alt="Screenshot 2025-10-04 at 16 26 54" src="https://github.com/user-attachments/assets/94cfdae3-7d04-47e1-9452-83c41e2e0c28" />
+
+
 Modern inventory management demo built with the Next.js App Router, Supabase authentication, and shadcn/ui components. The app showcases a product catalog dashboard with protected routes, storage integration, and rich UI theming.
 
 ## Stack
