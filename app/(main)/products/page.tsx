@@ -20,8 +20,11 @@ type Product = {
   name?: string | null;
   description?: string | null;
   price?: number | null;
+  image?: string | null;
   created_at?: string | null;
 };
+
+const MAX_IMAGE_BYTES = 1_000_000; // 1MB limit
 
 const formatCurrency = (value: number | null | undefined) => {
   if (typeof value !== "number" || Number.isNaN(value)) return null;
@@ -40,26 +43,74 @@ const normalizeId = (value: string) => {
   return value;
 };
 
+const buildModalUrl = (
+  modal: "create" | "edit" | "delete",
+  params: Record<string, string> = {}
+) => {
+  const search = new URLSearchParams({ modal, ...params });
+  return `/products?${search.toString()}`;
+};
+
 async function createProduct(formData: FormData) {
   "use server";
 
   const supabase = await createClient();
+
+  const redirectWithError = (code: string) => {
+    redirect(buildModalUrl("create", { error: code }));
+  };
 
   const name = (formData.get("name") ?? "").toString().trim();
   const description =
     (formData.get("description") ?? "").toString().trim() || null;
   const priceRaw = (formData.get("price") ?? "").toString().trim();
   const price = priceRaw ? Number(priceRaw) : null;
+  const imageUrl = (formData.get("imageUrl") ?? "").toString().trim();
+  const imageFile = formData.get("image");
 
   if (!name) {
     console.warn("Skipping product creation: name is required");
     return;
   }
 
+  let image: string | null = imageUrl || null;
+
+  if (imageFile instanceof File && imageFile.size > 0) {
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      console.warn("Skipping image upload: file exceeds 1MB", {
+        name: imageFile.name,
+        size: imageFile.size,
+      });
+      redirectWithError("imageTooLarge");
+    }
+    const fileExt = imageFile.name.split(".").pop()?.toLowerCase() || "png";
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = `products/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("product-image")
+      .upload(filePath, imageFile, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: imageFile.type,
+      });
+
+    if (uploadError) {
+      console.error("uploadProductImage", uploadError);
+      redirectWithError("uploadFailed");
+    } else {
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("product-image").getPublicUrl(filePath);
+      image = publicUrl ?? image;
+    }
+  }
+
   const { error } = await supabase.from("products").insert({
     name,
     description,
     price,
+    image,
   });
 
   if (error) {
@@ -81,21 +132,68 @@ async function updateProduct(formData: FormData) {
     console.warn("Skipping product update: missing id");
     return;
   }
+  const encodedId = encodeURIComponent(String(id));
+
+  const redirectWithError = (code: string) => {
+    redirect(
+      buildModalUrl("edit", {
+        id: encodedId,
+        error: code,
+      })
+    );
+  };
 
   const name = (formData.get("name") ?? "").toString().trim();
   const description =
     (formData.get("description") ?? "").toString().trim() || null;
   const priceRaw = (formData.get("price") ?? "").toString().trim();
   const price = priceRaw ? Number(priceRaw) : null;
+  const existingImage =
+    (formData.get("existingImage") ?? "").toString().trim() || null;
+  const imageUrl = (formData.get("imageUrl") ?? "").toString().trim();
+  const imageFile = formData.get("image");
 
   if (!name) {
     console.warn("Skipping product update: name is required");
     return;
   }
 
+  let image: string | null = imageUrl || existingImage;
+
+  if (imageFile instanceof File && imageFile.size > 0) {
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      console.warn("Skipping image upload: file exceeds 1MB", {
+        name: imageFile.name,
+        size: imageFile.size,
+      });
+      redirectWithError("imageTooLarge");
+    }
+    const fileExt = imageFile.name.split(".").pop()?.toLowerCase() || "png";
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = `products/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("product-image")
+      .upload(filePath, imageFile, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: imageFile.type,
+      });
+
+    if (uploadError) {
+      console.error("uploadProductImage", uploadError);
+      redirectWithError("uploadFailed");
+    } else {
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("product-image").getPublicUrl(filePath);
+      image = publicUrl ?? image;
+    }
+  }
+
   const { error } = await supabase
     .from("products")
-    .update({ name, description, price })
+    .update({ name, description, price, image })
     .eq("id", normalizeId(id));
 
   if (error) {
@@ -109,7 +207,6 @@ async function updateProduct(formData: FormData) {
 
 async function deleteProduct(formData: FormData) {
   "use server";
-  console.log("deleteProduct called");
   const supabase = await createClient();
 
   const id = (formData.get("id") ?? "").toString();
@@ -117,7 +214,6 @@ async function deleteProduct(formData: FormData) {
     console.warn("Skipping product deletion: missing id");
     return;
   }
-  console.log("Deleting product with id:", id);
   const { error } = await supabase
     .from("products")
     .delete()
@@ -137,7 +233,10 @@ export default async function Page({
 }: PageProps) {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("products").select();
+  const { data, error } = await supabase
+    .from("products")
+    .select()
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("fetchProducts", error);
@@ -146,7 +245,6 @@ export default async function Page({
   const products: Product[] = data ?? [];
 
   const resolvedSearchParams = await Promise.resolve(searchParamsInput ?? {});
-  console.log({ resolvedSearchParams });
   const modalParam =
     typeof resolvedSearchParams.modal === "string"
       ? resolvedSearchParams.modal
@@ -155,9 +253,19 @@ export default async function Page({
     typeof resolvedSearchParams.id === "string"
       ? resolvedSearchParams.id
       : undefined;
+  const errorCode =
+    typeof resolvedSearchParams.error === "string"
+      ? resolvedSearchParams.error
+      : undefined;
   const selectedProduct = selectedId
     ? products.find((product) => String(product.id) === selectedId)
     : undefined;
+
+  const errorMessages: Record<string, string> = {
+    imageTooLarge: "Image file must be 1MB or smaller.",
+    uploadFailed: "We couldn't upload that image. Please try again.",
+  };
+  const errorMessage = errorCode ? errorMessages[errorCode] : undefined;
 
   return (
     <main className="relative min-h-screen  text-slate-900 transition-colors  dark:text-slate-100">
@@ -166,9 +274,6 @@ export default async function Page({
         <header className="flex flex-col gap-6 border-b border-slate-200 pb-8 dark:border-slate-800">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-sky-600 dark:text-sky-400">
-                Product Ops
-              </p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-50">
                 Product Management
               </h1>
@@ -214,6 +319,9 @@ export default async function Page({
                         Name
                       </th>
                       <th scope="col" className="px-6 py-4">
+                        Image
+                      </th>
+                      <th scope="col" className="px-6 py-4">
                         Description
                       </th>
                       <th scope="col" className="px-6 py-4">
@@ -238,10 +346,33 @@ export default async function Page({
                           className={`${rowClass} text-sm text-slate-700 transition-colors dark:text-slate-200`}
                         >
                           <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">
-                            {product.id}
+                            {idx + 1}
                           </td>
                           <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-50">
                             {product.name || "Untitled"}
+                          </td>
+                          <td className="px-6 py-4">
+                            {product.image ? (
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={product.image}
+                                  alt={product.name ?? "Product image"}
+                                  className="h-12 w-12 rounded-xl object-cover shadow-sm shadow-slate-200/60 dark:shadow-sky-900/40"
+                                />
+                                <a
+                                  href={product.image}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-sky-600 underline-offset-4 hover:underline dark:text-sky-300"
+                                >
+                                  View
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                No image
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
                             <span className="block max-w-2xl break-words text-sm">
@@ -308,6 +439,9 @@ export default async function Page({
           closeHref="/products"
         >
           <form action={createProduct} className="mt-6 space-y-4">
+            {errorMessage && modalParam === "create" ? (
+              <ErrorBanner message={errorMessage} />
+            ) : null}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Name
@@ -329,6 +463,20 @@ export default async function Page({
                 placeholder="What makes this product valuable?"
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 transition focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Upload image (optional)
+              </label>
+              <input
+                name="image"
+                type="file"
+                accept="image/*"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 transition file:mr-3 file:rounded-full file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:file:bg-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:file:bg-slate-50 dark:file:text-slate-900 dark:hover:file:bg-slate-200"
+              />
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Max size 1MB. Files are stored in the <code className="font-mono">product-image</code> bucket.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -374,6 +522,14 @@ export default async function Page({
                 name="id"
                 value={String(selectedProduct.id)}
               />
+              <input
+                type="hidden"
+                name="existingImage"
+                value={selectedProduct.image ?? ""}
+              />
+              {errorMessage && modalParam === "edit" ? (
+                <ErrorBanner message={errorMessage} />
+              ) : null}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   Name
@@ -395,6 +551,35 @@ export default async function Page({
                   defaultValue={selectedProduct.description ?? ""}
                   className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 transition focus:border-sky-400 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
+                {selectedProduct.image ? (
+                  <div className="flex items-center justify-center">
+                    <img
+                      src={selectedProduct.image}
+                      alt={selectedProduct.name ?? "Product image"}
+                      className="h-16 w-16 rounded-2xl object-cover shadow-sm shadow-slate-200/60 dark:shadow-sky-900/40"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                    No image
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Upload new image
+                  </label>
+                  <input
+                    name="image"
+                    type="file"
+                    accept="image/*"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 transition file:mr-3 file:rounded-full file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:file:bg-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:file:bg-slate-50 dark:file:text-slate-900 dark:hover:file:bg-slate-200"
+                  />
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Max size 1MB. 
+                  </p>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -512,6 +697,14 @@ function Modal({
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-100/80 px-4 py-3 text-sm text-red-700 dark:border-red-400/50 dark:bg-red-500/10 dark:text-red-200">
+      {message}
     </div>
   );
 }

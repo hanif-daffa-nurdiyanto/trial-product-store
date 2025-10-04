@@ -1,105 +1,122 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# Trial Product Store
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+Modern inventory management demo built with the Next.js App Router, Supabase authentication, and shadcn/ui components. The app showcases a product catalog dashboard with protected routes, storage integration, and rich UI theming.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+## Stack
 
-## Features
+- [Next.js](https://nextjs.org/) 15 (App Router + Server Actions)
+- [Supabase](https://supabase.com/) for auth, database, and storage
+- [shadcn/ui](https://ui.shadcn.com/) + Tailwind CSS for styling
+- TypeScript, ESLint, and Turbopack dev server
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+## Prerequisites
 
-## Demo
+- Node.js 20+ (LTS recommended)
+- npm 10+ (or pnpm/yarn if you prefer, though scripts assume npm)
+- A Supabase project with access to the SQL editor and storage
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+## 1. Clone the repository
 
-## Deploy to Vercel
+```bash
+git clone <your-fork-url>
+cd trial-product-store
+```
 
-Vercel deployment will guide you through creating a Supabase account and project.
+> If you cloned directly from the Codex workspace, you can skip the `git clone` command and simply ensure you are inside the project directory.
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+## 2. Install dependencies
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+From the project root run:
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+```bash
+npm install
+```
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+This installs Next.js, Supabase SDKs, shadcn/ui dependencies, and linting/tooling packages.
 
-## Clone and run locally
+## 3. Configure environment variables
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+Copy the provided example file and populate it with your Supabase credentials.
 
-2. Create a Next.js app using the Supabase Starter template npx command
+```bash
+cp .env.example .env.local
+```
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+Update `.env.local` with values from the Supabase dashboard (`Project Settings → API`).
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+```
+NEXT_PUBLIC_SUPABASE_URL=your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-service-role-key
+```
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+Additional variables you add (e.g. bucket names) should also live in `.env.local`. The App Router automatically loads this file in development.
 
-3. Use `cd` to change into the app's directory
+## 4. Seed the database (optional)
 
-   ```bash
-   cd with-supabase-app
-   ```
+If you cloned this project without Supabase migrations, create a `products` table that matches the schema expected by the UI. Example SQL:
 
-4. Rename `.env.example` to `.env.local` and update the following:
+```sql
+create table products (
+  id bigint generated always as identity primary key,
+  name text not null,
+  description text,
+  price numeric,
+  image text,
+  created_at timestamptz default now()
+);
+```
 
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
-   ```
+Create a storage bucket called `product-image` when using the image upload workflow.
 
-   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+## 5. Run the development server
 
-5. You can now run the Next.js local development server:
+```bash
+npm run dev
+```
 
-   ```bash
-   npm run dev
-   ```
+This starts the Turbopack dev server on [http://localhost:3000](http://localhost:3000). The protected dashboard will redirect to the auth pages until you sign in.
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+### Supabase session during local dev
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+- Use the Supabase dashboard to invite yourself as a user or enable email/password auth.
+- The project uses cookie-based sessions via `@supabase/ssr`; no manual token handling is required.
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+## 6. Linting & formatting
 
-## Feedback and issues
+```bash
+npm run lint
+```
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+The default configuration relies on Next.js ESLint presets. Resolve warnings about `<img>` elements or unescaped characters as needed.
 
-## More Supabase examples
+## 7. Build and production preview
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+```bash
+npm run build
+npm start
+```
+
+`next build` compiles the project and validates TypeScript. `npm start` serves the optimized output at the same port (default 3000).
+
+## 8. Useful scripts
+
+| Script           | Description                              |
+|------------------|------------------------------------------|
+| `npm run dev`    | Start the Turbopack dev server           |
+| `npm run lint`   | Run ESLint using the Next.js config      |
+| `npm run build`  | Create a production build                |
+| `npm start`      | Serve the production build               |
+
+## Troubleshooting
+
+- **Auth redirect loops**: confirm cookies are enabled and your Supabase URL/key are correct.
+- **Storage upload errors**: ensure the `product-image` bucket exists and the anon key has upload permissions.
+- **TypeScript path issues**: run `npm install` again to restore missing types.
+
+## Deploying
+
+You can deploy directly with Vercel or Netlify. Remember to add the same environment variables you use locally. For Vercel, connect your Supabase project via the Supabase integration to have variables synchronized automatically.
+
+---
+
+Feel free to adapt this README for your team’s workflows (e.g., add migration steps, CI commands, or deployment pipelines).
