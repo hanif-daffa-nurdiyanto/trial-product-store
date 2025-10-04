@@ -64,7 +64,7 @@ This starts the Turbopack dev server on [http://localhost:3000](http://localhost
 - Use the Supabase dashboard to invite yourself as a user or enable email/password auth.
 - The project uses cookie-based sessions via `@supabase/ssr`; no manual token handling is required.
 
-## 6. Linting & formatting
+## 5. Linting & formatting
 
 ```bash
 npm run lint
@@ -72,7 +72,7 @@ npm run lint
 
 The default configuration relies on Next.js ESLint presets. Resolve warnings about `<img>` elements or unescaped characters as needed.
 
-## 7. Build and production preview
+## 6. Build and production preview
 
 ```bash
 npm run build
@@ -81,7 +81,7 @@ npm start
 
 `next build` compiles the project and validates TypeScript. `npm start` serves the optimized output at the same port (default 3000).
 
-## 8. Useful scripts
+## 7. Useful scripts
 
 | Script           | Description                              |
 |------------------|------------------------------------------|
