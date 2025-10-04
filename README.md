@@ -51,24 +51,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-service-role-key
 
 Additional variables you add (e.g. bucket names) should also live in `.env.local`. The App Router automatically loads this file in development.
 
-## 4. Seed the database (optional)
-
-If you cloned this project without Supabase migrations, create a `products` table that matches the schema expected by the UI. Example SQL:
-
-```sql
-create table products (
-  id bigint generated always as identity primary key,
-  name text not null,
-  description text,
-  price numeric,
-  image text,
-  created_at timestamptz default now()
-);
-```
-
-Create a storage bucket called `product-image` when using the image upload workflow.
-
-## 5. Run the development server
+## 4. Run the development server
 
 ```bash
 npm run dev
